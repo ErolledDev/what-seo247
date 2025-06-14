@@ -9,15 +9,18 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   try {
+    console.log('Generating metadata for slug:', params.slug);
     const redirect = await RedirectManager.getRedirectBySlug(params.slug);
     
     if (!redirect) {
+      console.log('No redirect found for slug:', params.slug);
       return {
         title: 'Page Not Found',
         description: 'The requested page could not be found.',
       };
     }
 
+    console.log('Found redirect for metadata:', redirect.title);
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://your-domain.vercel.app';
     const currentUrl = `${baseUrl}/r/${params.slug}`;
 
@@ -61,9 +64,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function SlugRedirectPage({ params }: Props) {
   try {
+    console.log('Loading redirect page for slug:', params.slug);
     const redirect = await RedirectManager.getRedirectBySlug(params.slug);
     
     if (!redirect) {
+      console.log('No redirect found, showing 404');
       // Return a proper 404 page instead of calling notFound()
       return (
         <div className="min-h-screen bg-gradient-to-br from-red-50 to-orange-100 flex items-center justify-center p-4">
@@ -87,6 +92,8 @@ export default async function SlugRedirectPage({ params }: Props) {
         </div>
       );
     }
+
+    console.log('Found redirect, rendering page:', redirect.title);
 
     return (
       <Suspense fallback={

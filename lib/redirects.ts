@@ -9,7 +9,9 @@ import {
   query, 
   orderBy,
   where,
-  Timestamp 
+  Timestamp,
+  enableNetwork,
+  disableNetwork
 } from 'firebase/firestore';
 import { db } from './firebase';
 
@@ -51,7 +53,8 @@ export class RedirectManager {
       .replace(/[^a-z0-9\s-]/g, '') // Remove special characters
       .replace(/\s+/g, '-') // Replace spaces with hyphens
       .replace(/-+/g, '-') // Replace multiple hyphens with single
-      .replace(/^-|-$/g, ''); // Remove leading/trailing hyphens
+      .replace(/^-|-$/g, '') // Remove leading/trailing hyphens
+      .trim();
   }
 
   static async ensureUniqueSlug(baseSlug: string, excludeId?: string): Promise<string> {
@@ -93,6 +96,9 @@ export class RedirectManager {
     }
 
     try {
+      // Ensure network is enabled
+      await enableNetwork(db);
+      
       const redirectsRef = collection(db, this.COLLECTION_NAME);
       
       // Try optimized query with composite index
@@ -130,6 +136,7 @@ export class RedirectManager {
     }
 
     try {
+      await enableNetwork(db);
       const docRef = doc(db, this.COLLECTION_NAME, id);
       const docSnap = await getDoc(docRef);
       
@@ -157,18 +164,27 @@ export class RedirectManager {
     }
 
     try {
+      console.log('Looking for slug:', slug);
+      await enableNetwork(db);
+      
       const redirectsRef = collection(db, this.COLLECTION_NAME);
       const q = query(redirectsRef, where('slug', '==', slug));
       const querySnapshot = await getDocs(q);
       
+      console.log('Query results:', querySnapshot.docs.length, 'documents found');
+      
       if (!querySnapshot.empty) {
         const doc = querySnapshot.docs[0];
+        const data = doc.data();
+        console.log('Found redirect data:', data);
+        
         return {
           id: doc.id,
-          ...this.convertTimestamps(doc.data())
+          ...this.convertTimestamps(data)
         };
       }
       
+      console.log('No redirect found for slug:', slug);
       return null;
     } catch (error) {
       console.error('Error fetching redirect by slug:', error);
@@ -187,23 +203,52 @@ export class RedirectManager {
 
     const now = Timestamp.now();
     const redirectData = {
-      ...config,
+      title: config.title,
+      description: config.description,
+      image: config.image || '',
+      targetUrl: config.targetUrl,
+      keywords: config.keywords || '',
+      siteName: config.siteName || '',
+      type: config.type || 'website',
       slug: uniqueSlug,
       userId,
       createdAt: now,
       updatedAt: now,
     };
 
-    const docRef = await addDoc(collection(db, this.COLLECTION_NAME), redirectData);
-    
-    return {
-      id: docRef.id,
-      ...config,
-      slug: uniqueSlug,
-      userId,
-      createdAt: now.toDate(),
-      updatedAt: now.toDate(),
-    };
+    console.log('Creating redirect with data:', redirectData);
+
+    try {
+      await enableNetwork(db);
+      const docRef = await addDoc(collection(db, this.COLLECTION_NAME), redirectData);
+      console.log('Successfully created redirect with ID:', docRef.id);
+      
+      // Verify the document was created by fetching it back
+      const verifyDoc = await getDoc(docRef);
+      if (verifyDoc.exists()) {
+        console.log('Verified document exists:', verifyDoc.data());
+      } else {
+        console.error('Document was not created properly');
+      }
+      
+      return {
+        id: docRef.id,
+        title: config.title,
+        description: config.description,
+        image: config.image,
+        targetUrl: config.targetUrl,
+        keywords: config.keywords,
+        siteName: config.siteName,
+        type: config.type,
+        slug: uniqueSlug,
+        userId,
+        createdAt: now.toDate(),
+        updatedAt: now.toDate(),
+      };
+    } catch (error) {
+      console.error('Error creating redirect:', error);
+      throw error;
+    }
   }
 
   static async updateRedirect(
@@ -271,9 +316,9 @@ export class RedirectManager {
     }
 
     try {
+      await enableNetwork(db);
       const redirectsRef = collection(db, this.COLLECTION_NAME);
-      const q = query(redirectsRef, orderBy('createdAt', 'desc'));
-      const querySnapshot = await getDocs(q);
+      const querySnapshot = await getDocs(redirectsRef);
       
       return querySnapshot.docs.map(doc => ({
         id: doc.id,

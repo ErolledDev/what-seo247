@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -27,6 +27,26 @@ export default function RedirectPage({
   type,
 }: RedirectPageProps) {
   const [isRedirecting, setIsRedirecting] = useState(false);
+  const [countdown, setCountdown] = useState(5);
+  const [autoRedirect, setAutoRedirect] = useState(true);
+
+  // Auto redirect countdown
+  useEffect(() => {
+    if (!targetUrl || !autoRedirect) return;
+
+    const timer = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          handleRedirectNow();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [targetUrl, autoRedirect]);
 
   const handleRedirectNow = () => {
     if (targetUrl) {
@@ -35,12 +55,17 @@ export default function RedirectPage({
     }
   };
 
+  const handleCancelAutoRedirect = () => {
+    setAutoRedirect(false);
+    setCountdown(0);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
       <Card className="max-w-2xl w-full shadow-xl border-0 bg-white/95 backdrop-blur-sm">
         <CardHeader className="text-center pb-4">
           {siteName && (
-            <Badge variant="secondary\" className="w-fit mx-auto mb-2">
+            <Badge variant="secondary" className="w-fit mx-auto mb-2">
               {siteName}
             </Badge>
           )}
@@ -87,9 +112,28 @@ export default function RedirectPage({
 
           {targetUrl && (
             <div className="bg-gray-50 rounded-lg p-6 space-y-4">
+              {autoRedirect && countdown > 0 && (
+                <div className="text-center bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                  <p className="text-blue-800 font-medium mb-2">
+                    Automatically redirecting in {countdown} seconds...
+                  </p>
+                  <Button
+                    onClick={handleCancelAutoRedirect}
+                    variant="outline"
+                    size="sm"
+                    className="text-blue-600 border-blue-300 hover:bg-blue-100"
+                  >
+                    Cancel Auto-Redirect
+                  </Button>
+                </div>
+              )}
+
               <div className="text-center">
                 <p className="text-gray-700 mb-4">
-                  Ready to continue to your destination?
+                  {autoRedirect && countdown > 0 
+                    ? "Or click below to continue immediately:"
+                    : "Ready to continue to your destination?"
+                  }
                 </p>
               </div>
 
@@ -101,7 +145,10 @@ export default function RedirectPage({
                   size="lg"
                 >
                   {isRedirecting ? (
-                    'Redirecting...'
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                      Redirecting...
+                    </>
                   ) : (
                     <>
                       Continue Now

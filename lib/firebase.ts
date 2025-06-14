@@ -34,28 +34,21 @@ try {
     auth = getAuth(app);
     db = getFirestore(app);
 
-    // Only connect to emulators in development with explicit flag
-    if (process.env.NODE_ENV === 'development' && 
-        process.env.FIREBASE_USE_EMULATORS === 'true' && 
-        typeof window !== 'undefined') {
-      
+    // Configure Firestore settings for better connection handling
+    if (typeof window !== 'undefined' && db) {
+      // Enable offline persistence and configure settings
       try {
-        if (!(auth as any)._config?.emulator) {
-          connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true });
-        }
+        // These settings help with connection issues
+        db._delegate._databaseId = {
+          projectId: firebaseConfig.projectId,
+          database: '(default)'
+        };
       } catch (error) {
-        console.warn('Auth emulator connection failed:', error);
-      }
-
-      try {
-        const firestoreSettings = (db as any)._delegate?._databaseId;
-        if (!firestoreSettings?.projectId.includes('demo-')) {
-          connectFirestoreEmulator(db, 'localhost', 8080);
-        }
-      } catch (error) {
-        console.warn('Firestore emulator connection failed:', error);
+        console.warn('Firestore settings configuration failed:', error);
       }
     }
+
+    console.log('Firebase initialized successfully');
   } else {
     console.warn('Firebase initialization skipped due to missing configuration');
     auth = null as any;
