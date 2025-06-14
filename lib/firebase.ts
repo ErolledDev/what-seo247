@@ -13,7 +13,10 @@ const firebaseConfig = {
 
 // Validate Firebase configuration
 const requiredKeys = ['apiKey', 'authDomain', 'projectId', 'appId'];
-const missingKeys = requiredKeys.filter(key => !firebaseConfig[key as keyof typeof firebaseConfig]);
+const missingKeys = requiredKeys.filter(key => {
+  const value = firebaseConfig[key as keyof typeof firebaseConfig];
+  return !value || value === 'build-placeholder';
+});
 
 if (missingKeys.length > 0) {
   console.error('Missing Firebase configuration keys:', missingKeys);
@@ -25,7 +28,7 @@ if (missingKeys.length > 0) {
   });
   
   if (typeof window !== 'undefined') {
-    alert(`Firebase configuration error: Missing ${missingKeys.join(', ')}. Please check your environment variables.`);
+    console.warn(`Firebase configuration incomplete. Missing: ${missingKeys.join(', ')}`);
   }
 }
 
@@ -61,7 +64,7 @@ try {
       }
     }
   } else {
-    console.error('Firebase initialization skipped due to missing configuration');
+    console.warn('Firebase initialization skipped due to missing configuration');
     auth = null as any;
     db = null as any;
   }

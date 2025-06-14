@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowRight, Search, Link as LinkIcon, BarChart3, Settings } from 'lucide-react';
+import { ArrowRight, Search, Link as LinkIcon, BarChart3, Settings, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
 
 export default function Home() {
@@ -43,8 +43,9 @@ export default function Home() {
               <ArrowRight className="w-5 h-5 ml-2" />
             </Button>
           </Link>
-          <Link href="/u?title=Sample%20Demo%20Page&desc=This%20is%20a%20demonstration%20of%20dynamic%20meta%20tags&image=https://images.pexels.com/photos/270408/pexels-photo-270408.jpeg&url=https://example.com">
+          <Link href="/u?title=Demo%20Page&desc=This%20is%20a%20demonstration%20of%20dynamic%20meta%20tags&image=https://images.pexels.com/photos/270408/pexels-photo-270408.jpeg&url=https://example.com/services/web-design&keywords=seo,demo,redirect&site_name=SEO%20Demo&type=website">
             <Button size="lg" variant="outline" className="px-8 py-3">
+              <ExternalLink className="w-4 h-4 mr-2" />
               View Demo
             </Button>
           </Link>
@@ -113,8 +114,64 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Demo Section */}
+      <section className="container mx-auto px-4 py-16">
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-3xl p-8 md:p-12">
+          <div className="text-center mb-8">
+            <h2 className="text-3xl font-bold text-gray-900 mb-4">
+              Try It Now
+            </h2>
+            <p className="text-lg text-gray-600 mb-6">
+              Test the redirect system with these example URLs
+            </p>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg">
+              <CardHeader>
+                <CardTitle className="text-lg">Basic Redirect</CardTitle>
+                <CardDescription>Simple redirect with title and description</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <code className="text-xs bg-gray-100 p-2 rounded block break-all">
+                    /u?title=Example%20Page&desc=This%20is%20an%20example&url=https://example.com
+                  </code>
+                  <Link href="/u?title=Example%20Page&desc=This%20is%20an%20example%20redirect&url=https://example.com">
+                    <Button variant="outline" size="sm" className="w-full">
+                      <ExternalLink className="w-4 h-4 mr-2" />
+                      Try This Example
+                    </Button>
+                  </Link>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg">
+              <CardHeader>
+                <CardTitle className="text-lg">Full Featured</CardTitle>
+                <CardDescription>Complete redirect with image and metadata</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <code className="text-xs bg-gray-100 p-2 rounded block break-all">
+                    /u?title=Web%20Design&desc=Professional%20services&image=...&url=...
+                  </code>
+                  <Link href="/u?title=Web%20Design%20Services&desc=Professional%20web%20design%20and%20development&image=https://images.pexels.com/photos/196644/pexels-photo-196644.jpeg&url=https://example.com/services&keywords=web%20design,development,seo&site_name=Digital%20Agency&type=service">
+                    <Button variant="outline" size="sm" className="w-full">
+                      <ExternalLink className="w-4 h-4 mr-2" />
+                      Try This Example
+                    </Button>
+                  </Link>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </section>
+
       {/* How It Works Section */}
-      <section className="container mx-auto px-4 py-16 bg-gray-50 rounded-3xl mx-4">
+      <section className="container mx-auto px-4 py-16">
         <h2 className="text-3xl font-bold text-center text-gray-900 mb-12">
           How It Works
         </h2>

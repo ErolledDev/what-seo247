@@ -32,7 +32,8 @@ import {
   Shield,
   Settings,
   Link2,
-  BarChart3
+  BarChart3,
+  Bug
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/lib/auth';
@@ -69,6 +70,7 @@ export default function AdminPage() {
   const [isGeneratingSitemap, setIsGeneratingSitemap] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
+  const [isDebugging, setIsDebugging] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -96,6 +98,65 @@ export default function AdminPage() {
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const debugDatabase = async () => {
+    if (!user) return;
+    
+    setIsDebugging(true);
+    try {
+      await RedirectManager.debugListAllRedirects();
+      toast({
+        title: 'Debug Complete',
+        description: 'Check browser console for database contents',
+      });
+    } catch (error) {
+      toast({
+        title: 'Debug Error',
+        description: 'Failed to debug database',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsDebugging(false);
+    }
+  };
+
+  const testShortUrl = async (redirect: RedirectConfig) => {
+    if (!redirect.shortUrl) {
+      toast({
+        title: 'Error',
+        description: 'No short URL available',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      // Test if the short URL resolves
+      const response = await fetch(redirect.shortUrl, { 
+        method: 'HEAD',
+        redirect: 'manual' // Don't follow redirects, just check if it exists
+      });
+      
+      if (response.status === 404) {
+        toast({
+          title: 'URL Not Found',
+          description: `Short URL ${redirect.shortUrl} returns 404`,
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: 'URL Test Success',
+          description: `Short URL is accessible (Status: ${response.status})`,
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'URL Test Failed',
+        description: 'Could not test short URL',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -189,11 +250,16 @@ ${redirects.filter(redirect => redirect.shortUrl).map(redirect => {
           description: 'Short URL updated successfully',
         });
       } else {
-        await RedirectManager.createRedirect(formData, user.uid);
+        const newRedirect = await RedirectManager.createRedirect(formData, user.uid);
         toast({
           title: 'Success',
-          description: 'Short URL created successfully',
+          description: `Short URL created: ${newRedirect.shortUrl}`,
         });
+        
+        // Test the newly created URL
+        setTimeout(() => {
+          testShortUrl(newRedirect);
+        }, 2000);
       }
 
       setFormData(initialFormData);
@@ -202,6 +268,7 @@ ${redirects.filter(redirect => redirect.shortUrl).map(redirect => {
       // Clear sitemap so it needs to be regenerated
       setSitemapXml('');
     } catch (error: any) {
+      console.error('Submit error:', error);
       toast({
         title: 'Error',
         description: error.message || 'Failed to save redirect',
@@ -391,6 +458,72 @@ ${redirects.filter(redirect => redirect.shortUrl).map(redirect => {
             </Card>
           </div>
 
+          {/* Debug Section */}
+          <div className="mb-8">
+            <Card className="border-0 shadow-lg bg-red-50 border-red-200">
+              <CardHeader>
+                <CardTitle className="text-red-800 flex items-center gap-2">
+                  <Bug className="w-5 h-5" />
+                  Debug Tools
+                </CardTitle>
+                <CardDescription className="text-red-700">
+                  Use these tools to troubleshoot short URL issues
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex flex-wrap gap-4">
+                  <Button
+                    onClick={debugDatabase}
+                    disabled={isDebugging}
+                    variant="outline"
+                    className="border-red-300 text-red-700 hover:bg-red-100"
+                  >
+                    {isDebugging ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin mr-2" />
+                        Debugging...
+                      </>
+                    ) : (
+                      <>
+                        <Bug className="w-4 h-4 mr-2" />
+                        Debug Database
+                      </>
+                    )}
+                  </Button>
+                  
+                  <Button
+                    onClick={loadRedirects}
+                    disabled={isLoading}
+                    variant="outline"
+                    className="border-red-300 text-red-700 hover:bg-red-100"
+                  >
+                    {isLoading ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin mr-2" />
+                        Reloading...
+                      </>
+                    ) : (
+                      <>
+                        <Globe className="w-4 h-4 mr-2" />
+                        Reload Data
+                      </>
+                    )}
+                  </Button>
+                </div>
+                
+                <div className="bg-red-100 border border-red-300 rounded-lg p-4">
+                  <h4 className="font-semibold text-red-800 mb-2">Troubleshooting Steps:</h4>
+                  <ol className="text-sm text-red-700 space-y-1 list-decimal list-inside">
+                    <li>Click "Debug Database" to see all stored redirects in browser console</li>
+                    <li>Check if your redirects are being saved with correct slug and targetUrl</li>
+                    <li>Verify your Firebase configuration is working</li>
+                    <li>Test individual short URLs using the "Test" button in the table</li>
+                  </ol>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
           {/* Tabs */}
           <Tabs defaultValue="manage" className="space-y-8">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -487,6 +620,11 @@ ${redirects.filter(redirect => redirect.shortUrl).map(redirect => {
                                         'Generating...'
                                       )}
                                     </div>
+                                    {redirect.slug && (
+                                      <div className="text-xs text-gray-500 mt-1">
+                                        Slug: {redirect.slug}
+                                      </div>
+                                    )}
                                   </div>
                                 </TableCell>
                                 <TableCell>
@@ -518,6 +656,15 @@ ${redirects.filter(redirect => redirect.shortUrl).map(redirect => {
                                 </TableCell>
                                 <TableCell>
                                   <div className="flex justify-end gap-1">
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => testShortUrl(redirect)}
+                                      className="h-8 w-8 p-0 hover:bg-red-100 hover:text-red-600"
+                                      title="Test URL"
+                                    >
+                                      <Bug className="w-4 h-4" />
+                                    </Button>
                                     <Button
                                       size="sm"
                                       variant="ghost"
@@ -570,6 +717,11 @@ ${redirects.filter(redirect => redirect.shortUrl).map(redirect => {
                                     <p className="text-sm text-blue-600 mt-1 font-mono truncate">
                                       {redirect.shortUrl ? redirect.shortUrl.replace(window.location.origin, '') : 'Generating...'}
                                     </p>
+                                    {redirect.slug && (
+                                      <p className="text-xs text-gray-500 mt-1">
+                                        Slug: {redirect.slug}
+                                      </p>
+                                    )}
                                   </div>
                                   <Badge variant="secondary" className="ml-2 capitalize shrink-0">
                                     {redirect.type || 'website'}
@@ -598,6 +750,15 @@ ${redirects.filter(redirect => redirect.shortUrl).map(redirect => {
                                 </div>
 
                                 <div className="flex gap-2 pt-2 border-t border-gray-100">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => testShortUrl(redirect)}
+                                    className="gap-2 text-red-600 border-red-200 hover:bg-red-50"
+                                  >
+                                    <Bug className="w-4 h-4" />
+                                    Test
+                                  </Button>
                                   <Button
                                     size="sm"
                                     variant="outline"
