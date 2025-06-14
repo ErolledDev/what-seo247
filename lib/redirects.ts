@@ -9,9 +9,7 @@ import {
   query, 
   orderBy,
   where,
-  Timestamp,
-  enableNetwork,
-  disableNetwork
+  Timestamp 
 } from 'firebase/firestore';
 import { db } from './firebase';
 
@@ -24,8 +22,10 @@ export interface RedirectConfig {
   keywords?: string;
   siteName?: string;
   type?: string;
-  slug: string;
   userId: string;
+  shortUrl?: string; // Add short URL field
+  slug?: string; // Add slug field
+  clicks?: number; // Add clicks tracking
   createdAt: Date;
   updatedAt: Date;
 }
@@ -35,70 +35,66 @@ export class RedirectManager {
 
   private static validateDb(): void {
     if (!db) {
-      throw new Error('Firestore not initialized - check Firebase configuration');
+      throw new Error('Firestore not initialized');
     }
   }
 
   private static convertTimestamps(data: any): RedirectConfig {
     return {
       ...data,
-      createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt),
-      updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : new Date(data.updatedAt),
+      createdAt: data.createdAt.toDate(),
+      updatedAt: data.updatedAt.toDate(),
     } as RedirectConfig;
   }
 
-  static generateSlug(title: string): string {
+  // Generate SEO-friendly slug from title
+  private static generateSlug(title: string): string {
     return title
       .toLowerCase()
       .replace(/[^a-z0-9\s-]/g, '') // Remove special characters
       .replace(/\s+/g, '-') // Replace spaces with hyphens
       .replace(/-+/g, '-') // Replace multiple hyphens with single
       .replace(/^-|-$/g, '') // Remove leading/trailing hyphens
-      .trim();
+      .substring(0, 50); // Limit length
   }
 
-  static async ensureUniqueSlug(baseSlug: string, excludeId?: string): Promise<string> {
-    if (!db) {
-      // If Firebase is not available, return the base slug with timestamp
-      return `${baseSlug}-${Date.now()}`;
-    }
+  // Ensure slug is unique by adding suffix if needed
+  private static async ensureUniqueSlug(baseSlug: string, userId: string): Promise<string> {
+    if (!db) throw new Error('Firestore not initialized');
 
-    try {
-      let slug = baseSlug;
-      let counter = 1;
+    let slug = baseSlug;
+    let counter = 1;
 
-      while (true) {
-        const redirectsRef = collection(db, this.COLLECTION_NAME);
-        const q = query(redirectsRef, where('slug', '==', slug));
-        const querySnapshot = await getDocs(q);
-        
-        // Check if slug exists and it's not the current record being updated
-        const existingDoc = querySnapshot.docs.find(doc => doc.id !== excludeId);
-        
-        if (!existingDoc) {
-          return slug;
-        }
-        
-        slug = `${baseSlug}-${counter}`;
-        counter++;
+    while (true) {
+      const q = query(
+        collection(db, this.COLLECTION_NAME),
+        where('slug', '==', slug),
+        where('userId', '==', userId)
+      );
+      const querySnapshot = await getDocs(q);
+
+      if (querySnapshot.empty) {
+        return slug;
       }
-    } catch (error) {
-      console.error('Error checking slug uniqueness:', error);
-      // Fallback to timestamp-based slug if Firebase fails
-      return `${baseSlug}-${Date.now()}`;
+
+      // If slug exists, add counter
+      slug = `${baseSlug}-${counter}`;
+      counter++;
+
+      // Prevent infinite loop
+      if (counter > 100) {
+        slug = `${baseSlug}-${Date.now()}`;
+        break;
+      }
     }
+
+    return slug;
   }
 
   static async getAllRedirects(userId: string): Promise<RedirectConfig[]> {
-    if (!db) {
-      console.warn('Firebase not available, returning empty array');
-      return [];
-    }
+    if (!db) return [];
 
     try {
-      // Ensure network is enabled
-      await enableNetwork(db);
-      
       const redirectsRef = collection(db, this.COLLECTION_NAME);
       
       // Try optimized query with composite index
@@ -111,7 +107,6 @@ export class RedirectManager {
           ...this.convertTimestamps(doc.data())
         }));
       } catch (indexError) {
-        console.warn('Composite index not available, using fallback query');
         // Fallback without orderBy if composite index doesn't exist
         const fallbackQuery = query(redirectsRef, where('userId', '==', userId));
         const querySnapshot = await getDocs(fallbackQuery);
@@ -130,13 +125,9 @@ export class RedirectManager {
   }
 
   static async getRedirectById(id: string, userId: string): Promise<RedirectConfig | null> {
-    if (!db) {
-      console.warn('Firebase not available');
-      return null;
-    }
+    if (!db) return null;
 
     try {
-      await enableNetwork(db);
       const docRef = doc(db, this.COLLECTION_NAME, id);
       const docSnap = await getDoc(docRef);
       
@@ -157,103 +148,46 @@ export class RedirectManager {
     }
   }
 
-  static async getRedirectBySlug(slug: string): Promise<RedirectConfig | null> {
-    if (!db) {
-      console.warn('Firebase not available');
-      return null;
-    }
-
-    try {
-      console.log('Looking for slug:', slug);
-      await enableNetwork(db);
-      
-      const redirectsRef = collection(db, this.COLLECTION_NAME);
-      const q = query(redirectsRef, where('slug', '==', slug));
-      const querySnapshot = await getDocs(q);
-      
-      console.log('Query results:', querySnapshot.docs.length, 'documents found');
-      
-      if (!querySnapshot.empty) {
-        const doc = querySnapshot.docs[0];
-        const data = doc.data();
-        console.log('Found redirect data:', data);
-        
-        return {
-          id: doc.id,
-          ...this.convertTimestamps(data)
-        };
-      }
-      
-      console.log('No redirect found for slug:', slug);
-      return null;
-    } catch (error) {
-      console.error('Error fetching redirect by slug:', error);
-      return null;
-    }
-  }
-
   static async createRedirect(
-    config: Omit<RedirectConfig, 'id' | 'slug' | 'createdAt' | 'updatedAt'>,
+    config: Omit<RedirectConfig, 'id' | 'createdAt' | 'updatedAt' | 'shortUrl' | 'slug' | 'clicks'>,
     userId: string
   ): Promise<RedirectConfig> {
     this.validateDb();
 
+    // Generate slug and short URL
     const baseSlug = this.generateSlug(config.title);
-    const uniqueSlug = await this.ensureUniqueSlug(baseSlug);
+    const uniqueSlug = await this.ensureUniqueSlug(baseSlug, userId);
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://your-domain.vercel.app';
+    const shortUrl = `${baseUrl}/s/${uniqueSlug}`;
 
     const now = Timestamp.now();
     const redirectData = {
-      title: config.title,
-      description: config.description,
-      image: config.image || '',
-      targetUrl: config.targetUrl,
-      keywords: config.keywords || '',
-      siteName: config.siteName || '',
-      type: config.type || 'website',
-      slug: uniqueSlug,
+      ...config,
       userId,
+      shortUrl,
+      slug: uniqueSlug,
+      clicks: 0,
       createdAt: now,
       updatedAt: now,
     };
 
-    console.log('Creating redirect with data:', redirectData);
-
-    try {
-      await enableNetwork(db);
-      const docRef = await addDoc(collection(db, this.COLLECTION_NAME), redirectData);
-      console.log('Successfully created redirect with ID:', docRef.id);
-      
-      // Verify the document was created by fetching it back
-      const verifyDoc = await getDoc(docRef);
-      if (verifyDoc.exists()) {
-        console.log('Verified document exists:', verifyDoc.data());
-      } else {
-        console.error('Document was not created properly');
-      }
-      
-      return {
-        id: docRef.id,
-        title: config.title,
-        description: config.description,
-        image: config.image,
-        targetUrl: config.targetUrl,
-        keywords: config.keywords,
-        siteName: config.siteName,
-        type: config.type,
-        slug: uniqueSlug,
-        userId,
-        createdAt: now.toDate(),
-        updatedAt: now.toDate(),
-      };
-    } catch (error) {
-      console.error('Error creating redirect:', error);
-      throw error;
-    }
+    const docRef = await addDoc(collection(db, this.COLLECTION_NAME), redirectData);
+    
+    return {
+      id: docRef.id,
+      ...config,
+      userId,
+      shortUrl,
+      slug: uniqueSlug,
+      clicks: 0,
+      createdAt: now.toDate(),
+      updatedAt: now.toDate(),
+    };
   }
 
   static async updateRedirect(
     id: string,
-    updates: Partial<Omit<RedirectConfig, 'id' | 'createdAt' | 'userId'>>,
+    updates: Partial<Omit<RedirectConfig, 'id' | 'createdAt' | 'userId' | 'shortUrl' | 'slug' | 'clicks'>>,
     userId: string
   ): Promise<RedirectConfig | null> {
     this.validateDb();
@@ -268,24 +202,31 @@ export class RedirectManager {
       throw new Error('Unauthorized: You can only update your own redirects');
     }
 
-    // If title is being updated, regenerate slug
-    let finalUpdates = { ...updates };
+    // If title is being updated, regenerate slug and short URL
+    let updatedData = { ...updates };
     if (updates.title && updates.title !== data.title) {
       const baseSlug = this.generateSlug(updates.title);
-      const uniqueSlug = await this.ensureUniqueSlug(baseSlug, id);
-      finalUpdates.slug = uniqueSlug;
+      const uniqueSlug = await this.ensureUniqueSlug(baseSlug, userId);
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://your-domain.vercel.app';
+      const shortUrl = `${baseUrl}/s/${uniqueSlug}`;
+      
+      updatedData = {
+        ...updates,
+        slug: uniqueSlug,
+        shortUrl,
+      };
     }
 
     const now = Timestamp.now();
     await updateDoc(docRef, {
-      ...finalUpdates,
+      ...updatedData,
       updatedAt: now,
     });
 
     return {
       id,
       ...data,
-      ...finalUpdates,
+      ...updatedData,
       userId,
       createdAt: data.createdAt.toDate(),
       updatedAt: now.toDate(),
@@ -310,15 +251,12 @@ export class RedirectManager {
   }
 
   static async getAllRedirectsForSitemap(): Promise<RedirectConfig[]> {
-    if (!db) {
-      console.warn('Firebase not available for sitemap generation');
-      return [];
-    }
+    if (!db) return [];
 
     try {
-      await enableNetwork(db);
       const redirectsRef = collection(db, this.COLLECTION_NAME);
-      const querySnapshot = await getDocs(redirectsRef);
+      const q = query(redirectsRef, orderBy('createdAt', 'desc'));
+      const querySnapshot = await getDocs(q);
       
       return querySnapshot.docs.map(doc => ({
         id: doc.id,
@@ -330,7 +268,73 @@ export class RedirectManager {
     }
   }
 
+  static async getRedirectBySlug(slug: string): Promise<RedirectConfig | null> {
+    if (!db) return null;
+
+    try {
+      const q = query(
+        collection(db, this.COLLECTION_NAME),
+        where('slug', '==', slug)
+      );
+      const querySnapshot = await getDocs(q);
+      
+      if (!querySnapshot.empty) {
+        const doc = querySnapshot.docs[0];
+        return {
+          id: doc.id,
+          ...this.convertTimestamps(doc.data())
+        };
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error fetching redirect by slug:', error);
+      return null;
+    }
+  }
+
+  static async incrementClicks(slug: string): Promise<void> {
+    if (!db) return;
+
+    try {
+      const q = query(
+        collection(db, this.COLLECTION_NAME),
+        where('slug', '==', slug)
+      );
+      const querySnapshot = await getDocs(q);
+      
+      if (!querySnapshot.empty) {
+        const docRef = querySnapshot.docs[0].ref;
+        const currentData = querySnapshot.docs[0].data();
+        
+        await updateDoc(docRef, {
+          clicks: (currentData.clicks || 0) + 1,
+          updatedAt: Timestamp.now(),
+        });
+      }
+    } catch (error) {
+      console.error('Error incrementing clicks:', error);
+    }
+  }
+
   static buildRedirectUrl(baseUrl: string, config: RedirectConfig): string {
-    return `${baseUrl}/r/${config.slug}`;
+    // Return short URL if available
+    if (config.shortUrl) {
+      return config.shortUrl;
+    }
+
+    // Fallback to long URL format
+    const params = new URLSearchParams({
+      title: config.title,
+      desc: config.description,
+      url: config.targetUrl,
+    });
+
+    if (config.image) params.set('image', config.image);
+    if (config.keywords) params.set('keywords', config.keywords);
+    if (config.siteName) params.set('site_name', config.siteName);
+    if (config.type) params.set('type', config.type);
+
+    return `${baseUrl}/u?${params.toString()}`;
   }
 }

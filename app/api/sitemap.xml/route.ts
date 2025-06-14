@@ -22,14 +22,24 @@ export async function GET() {
     <priority>0.8</priority>
   </url>
   
-  <!-- SEO-friendly short URLs -->
-${redirects.map(redirect => {
-  const redirectUrl = RedirectManager.buildRedirectUrl(baseUrl, redirect);
+  <!-- Short URL pages (SEO-friendly slugs) -->
+${redirects.filter(redirect => redirect.shortUrl && redirect.slug).map(redirect => {
   return `  <url>
-    <loc>${redirectUrl}</loc>
+    <loc>${redirect.shortUrl}</loc>
     <lastmod>${redirect.updatedAt.toISOString()}</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
+  </url>`;
+}).join('\n')}
+
+  <!-- Legacy redirect pages (for backward compatibility) -->
+${redirects.filter(redirect => !redirect.shortUrl).map(redirect => {
+  const redirectUrl = RedirectManager.buildRedirectUrl(baseUrl, redirect);
+  return `  <url>
+    <loc>${redirectUrl.replace(/&/g, '&')}</loc>
+    <lastmod>${redirect.updatedAt.toISOString()}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
   </url>`;
 }).join('\n')}
 </urlset>`;

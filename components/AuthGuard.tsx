@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Shield, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Loader2, Shield, AlertTriangle } from 'lucide-react';
 
 interface AuthGuardProps {
   children: React.ReactNode;
@@ -67,9 +67,6 @@ export default function AuthGuard({ children }: AuthGuardProps) {
             break;
           case 'auth/too-many-requests':
             errorMessage = 'Too many failed attempts. Please try again later';
-            break;
-          case 'auth/network-request-failed':
-            errorMessage = 'Network error. Please check your internet connection and try again.';
             break;
           default:
             errorMessage = error.message || `Failed to ${action === 'signin' ? 'sign in' : 'create account'}`;
@@ -163,7 +160,7 @@ export default function AuthGuard({ children }: AuthGuardProps) {
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
         <div className="text-center">
           <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-600" />
-          <p className="text-gray-600">Connecting to Firebase...</p>
+          <p className="text-gray-600">Loading...</p>
         </div>
       </div>
     );
@@ -181,14 +178,6 @@ export default function AuthGuard({ children }: AuthGuardProps) {
             <CardDescription>
               Sign in to access the SEO Redirect Manager
             </CardDescription>
-            
-            {/* Firebase Connection Status */}
-            <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-              <div className="flex items-center justify-center gap-2">
-                <CheckCircle className="w-4 h-4 text-green-600" />
-                <span className="text-sm text-green-800 font-medium">Firebase Connected</span>
-              </div>
-            </div>
           </CardHeader>
           <CardContent>
             <Tabs defaultValue="signin" className="space-y-4">
